@@ -1,0 +1,52 @@
+services:
+  intelligence-ollama:
+    image: ollama/ollama:latest
+    container_name: intelligence-ollama
+    restart: unless-stopped
+    ports:
+      # 11434 는 dodgers-ollama-1 가 점유 → 03-intelligence 는 호스트 11435 로 노출.
+      # 컨테이너 내부 통신 (detection-api → intelligence-ollama:11434) 은 영향 없음.
+      - "${HOST_BIND_IP:-127.0.0.1}:11435:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    environment:
+      OLLAMA_MAX_LOADED_MODELS: "1"
+      OLLAMA_KEEP_ALIVE: "2m"
+      OLLAMA_HOST: "0.0.0.0:11434"
+    networks:
+      - intelligence-internal
+
+  # 모델 자동 pull — Ollama 가동 후 일회성 실행. 이미 받은 모델은 즉시 종료.
+  intelligence-ollama-pull:
+    image: ollama/ollama:latest
+    container_name: intelligence-ollama-pull
+    depends_on:
+      - intelligence-ollama
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        sleep 5
+        OLLAMA_HOST=http://intelligence-ollama:11434 ollama pull ${OLLAMA_MODEL:-gemma4:e2b-it-q4_K_M}
+        OLLAMA_HOST=http://intelligence-ollama:11434 ollama pull ${EMBED_MODEL:-nomic-embed-text}
+        echo "[pull] done"
+    restart: "no"
+    networks:
+      - intelligence-internal
+
+# intelligence-ui (Streamlit) 컨테이너 제거됨 — UI 는 04-ui (TrinitySOC) 로 이관.
+# Python 모듈 (agent.py · rag_chain.py · knowledge_loader.py · build_attack_knowledge.py) 은
+# 디렉토리에 그대로 유지. 필요 시 ad-hoc 실행:
+#   cd 03-intelligence && python -m venv .venv && source .venv/bin/activate
+#   pip install -r requirements.txt
+#   python scripts/build_attack_knowledge.py
+
+networks:
+  intelligence-internal:
+    driver: bridge
+  loki-net:
+    external: true
+    name: ${LOKI_NETWORK_NAME:-siem-trinity_default}
+
+volumes:
+  ollama-data:
+  # chroma-data 는 ad-hoc 사용 시점에 외부에서 생성하거나, 향후 BFF 가 직접 임베딩 시 재활성화.

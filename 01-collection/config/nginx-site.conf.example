@@ -1,0 +1,79 @@
+# nginx 서버블록 예시 — ModSecurity WAF 를 앞단에 두고 내부 서비스로 프록시
+#
+# 공개판 주의: 원본은 운영자 개인 사이트의 실제 설정이라 미포함이다.
+# 이 파일은 같은 구조를 도메인·경로만 일반화해 옮긴 것이다.
+# 사용 시 example.com · 포트 · 백엔드 주소를 본인 환경으로 바꾼다.
+#
+# 적용: 01-collection/scripts/apply-modsecurity.sh
+
+# ① 정적 파일을 서빙하는 내부 서버 (외부에 직접 노출하지 않는다)
+server {
+    listen 127.0.0.1:2223;
+    server_name example.com www.example.com;
+
+    root /var/www/example/dist;
+    index index.html;
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}
+
+# ② 외부 HTTPS 입구 — 여기서만 ModSecurity WAF 를 태운다
+server {
+    listen 2026 ssl;
+    server_name example.com;
+
+    ssl_certificate     /etc/letsencrypt/live/example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/example.com/privkey.pem;
+
+    # ModSecurity WAF (01-collection Phase 7)
+    modsecurity on;
+    modsecurity_rules_file /etc/nginx/modsecurity_includes.conf;
+
+    # 서브패스로 붙는 백엔드 앱 예시 (Spring Boot 등)
+    # sub_filter 로 절대경로 자산을 서브패스에 맞춰 교정한다.
+    location /projects/app1/ {
+        proxy_pass http://127.0.0.1:2028/;
+
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        proxy_set_header Accept-Encoding "";
+        sub_filter_once off;
+        sub_filter 'href="/'   'href="/projects/app1/';
+        sub_filter 'src="/'    'src="/projects/app1/';
+        sub_filter 'action="/' 'action="/projects/app1/';
+    }
+
+    # detection-api (02-detection) 를 서브패스로 노출하는 예시
+    location /projects/siem/ {
+        rewrite ^/projects/siem/?$ /siem break;
+        proxy_pass http://127.0.0.1:2027;
+
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location /projects/siem/api/ {
+        proxy_pass http://127.0.0.1:2027/api/;
+
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # 기본 경로 → ① 의 정적 서버
+    location / {
+        proxy_pass http://127.0.0.1:2223;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}

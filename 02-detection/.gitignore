@@ -1,0 +1,12 @@
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.env
+models/*.pkl
+data/
+reports/
+*.log
+.DS_Store
+ui/node_modules/
+ui/dist/

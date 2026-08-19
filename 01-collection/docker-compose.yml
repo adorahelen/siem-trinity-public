@@ -1,0 +1,351 @@
+name: security-log-monitor
+
+services:
+  loki:
+    image: grafana/loki:2.9.4
+    container_name: loki
+    ports:
+      - "${HOST_BIND_IP:-127.0.0.1}:3100:3100"
+      - "127.0.0.1:3100:3100"   # 호스트 에이전트(collector/realtime/digest)가 localhost:3100으로 Loki 접근
+    volumes:
+      - ./config/loki-config.yml:/etc/loki/local-config.yaml
+      - loki-data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    restart: unless-stopped
+
+  promtail:
+    image: grafana/promtail:2.9.4
+    container_name: promtail
+    volumes:
+      - ./config/promtail-config.yml:/etc/promtail/config.yml
+      - /var/log:/var/log:ro
+      - /run/log/journal:/run/log/journal:ro
+      - /etc/machine-id:/etc/machine-id:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - wazuh-data:/wazuh-data:ro
+      - /opt/zeek/spool/logger:/zeek-logs/current:ro
+    command: -config.file=/etc/promtail/config.yml
+    restart: unless-stopped
+    depends_on:
+      - loki
+
+  wazuh-manager:
+    image: wazuh/wazuh-manager:4.14.3
+    container_name: wazuh-manager
+    ports:
+      - "127.0.0.1:1514:1514/tcp"
+      - "127.0.0.1:1515:1515/tcp"
+      - "127.0.0.1:55000:55000/tcp"
+    volumes:
+      - wazuh-data:/var/ossec
+      - ./config/wazuh-ossec.conf:/wazuh-config-mount/etc/ossec.conf
+      - ./config/filebeat.yml:/etc/filebeat/filebeat.yml
+    environment:
+      - INDEXER_ENABLED=false
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - "${HOST_BIND_IP:-127.0.0.1}:9090:9090"
+    volumes:
+      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.retention.time=30d'
+    restart: unless-stopped
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: node-exporter
+    pid: host
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--path.rootfs=/rootfs'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:10.3.3
+    container_name: grafana
+    ports:
+      - "${HOST_BIND_IP:-127.0.0.1}:3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GF_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GF_ADMIN_PASSWORD:?GF_ADMIN_PASSWORD must be set in .env}
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./config/grafana-datasource.yml:/etc/grafana/provisioning/datasources/loki.yml
+      - ./grafana/provisioning-dashboard.yml:/etc/grafana/provisioning/dashboards/security.yml
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+    restart: unless-stopped
+    depends_on:
+      - loki
+
+  # ────────────────────────────────────────────────────────────
+  # 데이터 리플레이어 — 합성 보안 이벤트를 Loki HTTP push 로 주입
+  # 빈 VM 환경에서 Grafana 대시보드를 실데이터 없이 시각화하기 위함.
+  # profile "replay" 격리. 활성화: docker compose --profile replay up -d siem-replay
+  # ────────────────────────────────────────────────────────────
+  siem-replay:
+    build: ./scripts/siem-replay
+    image: siem-replay:local
+    container_name: siem-replay
+    restart: unless-stopped
+    profiles: ["replay"]
+    environment:
+      LOKI_URL: http://loki:3100
+      REPLAY_BASE_TPS: "${REPLAY_BASE_TPS:-1.5}"
+      REPLAY_ANOMALY_INT: "${REPLAY_ANOMALY_INT:-600}"
+      REPLAY_ANOMALY_DUR: "${REPLAY_ANOMALY_DUR:-120}"
+    depends_on:
+      - loki
+
+  # ────────────────────────────────────────────────────────────
+  # XDR 단계 4 — MISP (위협 인텔리전스 플랫폼)
+  #
+  # profile "misp" 로 격리: 기본 `docker compose up -d` 에는 포함 안 됨.
+  # 활성화: docker compose --profile misp up -d
+  # 첫 부팅 ~3분 소요 (GPG 키 생성 + DB 초기화). docs/xdr-step4-misp.md 참조.
+  # ────────────────────────────────────────────────────────────
+  misp-db:
+    image: mariadb:11.4
+    container_name: misp-db
+    restart: unless-stopped
+    profiles: ["misp"]
+    environment:
+      MYSQL_DATABASE: misp
+      MYSQL_USER: misp
+      MYSQL_PASSWORD: ${MISP_DB_PASSWORD:?MISP_DB_PASSWORD must be set in .env}
+      MYSQL_ROOT_PASSWORD: ${MISP_DB_ROOT_PASSWORD:?MISP_DB_ROOT_PASSWORD must be set in .env}
+    command: >
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --innodb-buffer-pool-size=256M
+    volumes:
+      - misp-db-data:/var/lib/mysql
+
+  misp-redis:
+    image: redis:7-alpine
+    container_name: misp-redis
+    restart: unless-stopped
+    profiles: ["misp"]
+    volumes:
+      - misp-redis-data:/data
+
+  misp-core:
+    image: ghcr.io/misp/misp-docker/misp-core:latest
+    container_name: misp-core
+    restart: unless-stopped
+    profiles: ["misp"]
+    ports:
+      - "${HOST_BIND_IP:-127.0.0.1}:8443:443"
+      - "${HOST_BIND_IP:-127.0.0.1}:8080:80"
+    environment:
+      BASE_URL: ${MISP_BASE_URL:-https://localhost:8443}
+      MYSQL_HOST: misp-db
+      MYSQL_DATABASE: misp
+      MYSQL_USER: misp
+      MYSQL_PASSWORD: ${MISP_DB_PASSWORD:?MISP_DB_PASSWORD must be set in .env}
+      REDIS_HOST: misp-redis
+      ADMIN_EMAIL: ${MISP_ADMIN_EMAIL:-admin@admin.test}
+      ADMIN_PASSWORD: ${MISP_ADMIN_PASSWORD:?MISP_ADMIN_PASSWORD must be set in .env}
+      ADMIN_KEY: ${MISP_ADMIN_KEY:-}
+      ADMIN_ORG: ${MISP_ADMIN_ORG:-SIEM-Trinity}
+      DISABLE_IPV6: "true"
+    volumes:
+      - misp-config:/var/www/MISP/app/Config
+      - misp-files:/var/www/MISP/app/files
+      - misp-logs:/var/www/MISP/app/tmp/logs
+    depends_on:
+      - misp-db
+      - misp-redis
+
+  # ────────────────────────────────────────────────────────────
+  # XDR 단계 5 — Shuffle SOAR (Security Orchestration)
+  #
+  # profile "shuffle" 로 격리. 활성화: docker compose --profile shuffle up -d
+  # 4개 컨테이너 (frontend, backend, orborus, opensearch) ~1.5-2GB RAM.
+  # OpenSearch JVM heap 은 1GB 로 제한 (Xms1g/Xmx1g). 운영 시 2GB 권장.
+  #
+  # docs/xdr-step5-shuffle.md 의 playbook 가이드 참고.
+  # ────────────────────────────────────────────────────────────
+  shuffle-opensearch:
+    image: opensearchproject/opensearch:2.18.0
+    container_name: shuffle-opensearch
+    hostname: shuffle-opensearch
+    restart: unless-stopped
+    profiles: ["shuffle"]
+    environment:
+      - OPENSEARCH_JAVA_OPTS=-Xms${SHUFFLE_OPENSEARCH_HEAP:-1g} -Xmx${SHUFFLE_OPENSEARCH_HEAP:-1g}
+      - bootstrap.memory_lock=true
+      - cluster.initial_master_nodes=shuffle-opensearch
+      - cluster.routing.allocation.disk.threshold_enabled=false
+      - cluster.name=shuffle-cluster
+      - node.name=shuffle-opensearch
+      - node.store.allow_mmap=false
+      - discovery.seed_hosts=shuffle-opensearch
+      - DISABLE_PERFORMANCE_ANALYZER_AGENT_CLI=true
+      # OpenSearch 2.x 보안 플러그인 비활성화 — Shuffle backend 가 HTTP 로 접속하므로
+      # HTTPS+인증 강제 시 SSL handshake 실패. 내부 docker network 전용이라 비활성 안전.
+      - DISABLE_SECURITY_PLUGIN=true
+      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=${SHUFFLE_OPENSEARCH_PASSWORD:?SHUFFLE_OPENSEARCH_PASSWORD must be set in .env}
+    ulimits:
+      memlock: { soft: -1, hard: -1 }
+      nofile: { soft: 65536, hard: 65536 }
+    volumes:
+      - shuffle-opensearch-data:/usr/share/opensearch/data
+
+  shuffle-backend:
+    image: ghcr.io/shuffle/shuffle-backend:latest
+    container_name: shuffle-backend
+    hostname: shuffle-backend
+    restart: unless-stopped
+    profiles: ["shuffle"]
+    ports:
+      - "${HOST_BIND_IP:-127.0.0.1}:5001:5001"
+    environment:
+      - SHUFFLE_APP_HOTLOAD_FOLDER=/shuffle-apps
+      - SHUFFLE_FILE_LOCATION=/shuffle-files
+      - DATASTORE_EMULATOR_HOST=shuffle-opensearch:9200
+      - SHUFFLE_OPENSEARCH_URL=http://shuffle-opensearch:9200
+      - SHUFFLE_OPENSEARCH_USERNAME=admin
+      - SHUFFLE_OPENSEARCH_PASSWORD=${SHUFFLE_OPENSEARCH_PASSWORD:?SHUFFLE_OPENSEARCH_PASSWORD must be set in .env}
+      - SHUFFLE_OPENSEARCH_SKIPSSL_VERIFY=true
+      - ORG_ID=Shuffle
+      - BASE_URL=http://shuffle-backend:5001
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - shuffle-apps:/shuffle-apps
+      - shuffle-files:/shuffle-files
+    depends_on:
+      - shuffle-opensearch
+
+  shuffle-frontend:
+    image: ghcr.io/shuffle/shuffle-frontend:latest
+    container_name: shuffle-frontend
+    hostname: shuffle-frontend
+    restart: unless-stopped
+    profiles: ["shuffle"]
+    ports:
+      - "${HOST_BIND_IP:-127.0.0.1}:3001:80"
+    environment:
+      - BACKEND_HOSTNAME=shuffle-backend
+    depends_on:
+      - shuffle-backend
+
+  shuffle-orborus:
+    image: ghcr.io/shuffle/shuffle-orborus:latest
+    container_name: shuffle-orborus
+    hostname: shuffle-orborus
+    restart: unless-stopped
+    profiles: ["shuffle"]
+    security_opt: [ "seccomp:unconfined" ]
+    environment:
+      - ENVIRONMENT_NAME=Shuffle
+      - ORG_ID=Shuffle
+      - BASE_URL=http://shuffle-backend:5001
+      - DOCKER_API_VERSION=1.44
+      - SHUFFLE_STATS_DISABLED=true
+      - SHUFFLE_LOGS_DISABLED=true
+      - SHUFFLE_SWARM_CONFIG=run
+      - CLEANUP=false
+      - SHUFFLE_WORKER_IMAGE=ghcr.io/shuffle/shuffle-worker:latest
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  # ────────────────────────────────────────────────────────────
+  # XDR 단계 6 — TheHive 케이스 관리 (Cassandra + Elasticsearch 의존)
+  #
+  # profile "thehive" 격리. 활성화: docker compose --profile thehive up -d
+  # 가장 무거운 단계 — Cassandra heap 1g + ES heap 1g + TheHive ~512MB ≈ 3GB RAM.
+  # TheHive 5 는 Elasticsearch 7.17 만 호환 (8.x 절대 안 됨).
+  #
+  # docs/xdr-step6-thehive.md 의 첫 부팅 절차 참고.
+  # ────────────────────────────────────────────────────────────
+  thehive-cassandra:
+    image: cassandra:4.1
+    container_name: thehive-cassandra
+    hostname: thehive-cassandra
+    restart: unless-stopped
+    profiles: ["thehive"]
+    environment:
+      MAX_HEAP_SIZE: ${THEHIVE_CASSANDRA_HEAP:-1G}
+      HEAP_NEWSIZE: 100M
+      CASSANDRA_CLUSTER_NAME: thp
+    volumes:
+      - thehive-cassandra-data:/var/lib/cassandra
+
+  thehive-elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.27
+    container_name: thehive-elasticsearch
+    hostname: thehive-elasticsearch
+    restart: unless-stopped
+    profiles: ["thehive"]
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - cluster.name=hive
+      - thread_pool.search.queue_size=100000
+      - thread_pool.write.queue_size=10000
+      - gateway.recover_after_nodes=1
+      - xpack.security.audit.enabled=true
+      - ES_JAVA_OPTS=-Xms${THEHIVE_ES_HEAP:-1g} -Xmx${THEHIVE_ES_HEAP:-1g}
+    ulimits:
+      memlock: { soft: -1, hard: -1 }
+      nofile: { soft: 65536, hard: 65536 }
+    volumes:
+      - thehive-es-data:/usr/share/elasticsearch/data
+
+  thehive-app:
+    image: strangebee/thehive:5.4
+    container_name: thehive-app
+    hostname: thehive-app
+    restart: unless-stopped
+    profiles: ["thehive"]
+    depends_on:
+      - thehive-cassandra
+      - thehive-elasticsearch
+    ports:
+      - "${HOST_BIND_IP:-127.0.0.1}:9000:9000"
+    environment:
+      JVM_OPTS: "-Xms512m -Xmx${THEHIVE_HEAP:-1g}"
+    # --no-config 류 플래그 모두 제거 — entrypoint 가 secret/cql/es 설정 모두 작성.
+    command: >
+      --secret ${THEHIVE_SECRET:?THEHIVE_SECRET must be set in .env}
+      --cql-hostnames thehive-cassandra
+      --index-backend elasticsearch
+      --es-hostnames thehive-elasticsearch
+    volumes:
+      - thehive-data:/opt/thp/thehive/data
+
+networks:
+  default:
+    name: security-log-monitor_default
+
+volumes:
+  loki-data:
+  grafana-data:
+  prometheus-data:
+  wazuh-data:
+  misp-db-data:
+  misp-redis-data:
+  misp-config:
+  misp-files:
+  misp-logs:
+  shuffle-opensearch-data:
+  shuffle-apps:
+  shuffle-files:
+  thehive-cassandra-data:
+  thehive-es-data:
+  thehive-data:

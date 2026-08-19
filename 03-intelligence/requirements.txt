@@ -1,0 +1,32 @@
+# SIEM Intelligence Layer — Python 의존성
+# 설치: pip install -r requirements.txt
+# 호환: Python 3.12+ (Linux x86_64)
+# 사전 요구: sudo apt install python3.12-venv
+
+# ── LLM 오케스트레이션
+# langgraph>=1.2.0 필수 — 1.1.x는 langgraph-prebuilt 1.0.13의 ServerInfo import와 호환 안 됨
+langchain>=1.2.12,<2.0
+langchain-community>=0.4.1,<1.0
+langchain-ollama>=1.0.1,<2.0
+langchain-text-splitters>=1.1.1,<2.0
+langgraph>=1.2.0,<2.0
+langgraph-prebuilt>=1.0.13,<2.0
+
+# ── 벡터 DB
+chromadb>=1.5.5,<2.0
+
+# ── Ollama 클라이언트
+ollama>=0.6.1,<1.0
+
+# ── 문서 파싱
+pypdf>=6.9.1,<7.0
+
+# ── Web UI
+
+
+# ── CLI
+rich>=14.3.3,<15.0
+
+# ── 유틸
+requests>=2.32.5,<3.0
+python-dotenv>=1.2.2,<2.0

@@ -1,0 +1,531 @@
+{
+  "__inputs": [],
+  "__requires": [],
+  "annotations": { "list": [] },
+  "description": "Zeek NIDS — 네트워크 행위 분석 (conn / dns / http / ssl / notice / weird)",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 100,
+      "title": "📡 연결 분석 (conn.log)",
+      "type": "row"
+    },
+
+    {
+      "datasource": { "type": "loki", "uid": "loki" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "custom": { "lineWidth": 1, "fillOpacity": 10 } },
+        "overrides": []
+      },
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 1 },
+      "id": 1,
+      "options": { "tooltip": { "mode": "multi" } },
+      "targets": [
+        {
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "sum by (proto) (count_over_time({job=\"zeek_conn\"}[$__interval]))",
+          "legendFormat": "{{proto}}",
+          "refId": "A"
+        }
+      ],
+      "title": "프로토콜별 연결 수 (1분)",
+      "type": "timeseries"
+    },
+
+    {
+      "datasource": { "type": "loki", "uid": "loki" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{"color": "green","value": null},{"color": "yellow","value": 100},{"color": "red","value": 1000}] },
+          "mappings": [],
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 7, "w": 6, "x": 12, "y": 1 },
+      "id": 2,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "textMode": "auto", "colorMode": "background" },
+      "targets": [
+        {
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "sum(count_over_time({job=\"zeek_conn\"}[$__range]))",
+          "legendFormat": "총 연결 수",
+          "refId": "A"
+        }
+      ],
+      "title": "총 연결 수",
+      "type": "stat"
+    },
+
+    {
+      "datasource": { "type": "loki", "uid": "loki" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{"color": "green","value": null},{"color": "orange","value": 1},{"color": "red","value": 5}] },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 7, "w": 6, "x": 18, "y": 1 },
+      "id": 3,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "targets": [
+        {
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "sum(count_over_time({job=\"zeek_notice\"}[$__range]))",
+          "legendFormat": "보안 탐지",
+          "refId": "A"
+        }
+      ],
+      "title": "Zeek Notice (보안 이벤트)",
+      "type": "stat"
+    },
+
+    {
+      "datasource": { "type": "loki", "uid": "loki" },
+      "fieldConfig": {
+        "defaults": { "custom": { "align": "auto", "cellOptions": { "type": "auto" } } },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "src_ip" }, "properties": [{ "id": "displayName", "value": "출발지 IP" },{ "id": "custom.width", "value": 150 }] },
+          { "matcher": { "id": "byName", "options": "Value" }, "properties": [{ "id": "displayName", "value": "연결 수" },{ "id": "custom.width", "value": 100 },{ "id": "custom.displayMode", "value": "color-background" }] }
+        ]
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 8 },
+      "id": 4,
+      "options": { "sortBy": [{ "desc": true, "displayName": "연결 수" }] },
+      "targets": [
+        {
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "topk(10, sum by (src_ip) (count_over_time({job=\"zeek_conn\"} | json | __error__=\"\" [$__range])  ))",
+          "legendFormat": "{{src_ip}}",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "title": "Top 10 출발지 IP (연결 수)",
+      "type": "table",
+      "transformations": [{ "id": "labelsToFields", "options": { "mode": "rows", "valueLabel": "src_ip" } }, { "id": "sortBy", "options": { "fields": [{ "desc": true, "displayName": "Value" }] } }, { "id": "limit", "options": { "limitField": 10 } }]
+    },
+
+    {
+      "datasource": { "type": "loki", "uid": "loki" },
+      "fieldConfig": {
+        "defaults": { "custom": { "align": "auto", "cellOptions": { "type": "auto" } } },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "dst_ip" }, "properties": [{ "id": "displayName", "value": "목적지 IP" },{ "id": "custom.width", "value": 150 }] },
+          { "matcher": { "id": "byName", "options": "Value" }, "properties": [{ "id": "displayName", "value": "연결 수" },{ "id": "custom.displayMode", "value": "color-background" }] }
+        ]
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 8 },
+      "id": 5,
+      "targets": [
+        {
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "topk(10, sum by (dst_ip) (count_over_time({job=\"zeek_conn\"} | json | __error__=\"\" [$__range])))",
+          "legendFormat": "{{dst_ip}}",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "title": "Top 10 목적지 IP",
+      "type": "table",
+      "transformations": [{ "id": "labelsToFields", "options": { "mode": "rows", "valueLabel": "dst_ip" } }, { "id": "sortBy", "options": { "fields": [{ "desc": true, "displayName": "Value" }] } }, { "id": "limit", "options": { "limitField": 10 } }]
+    },
+
+    {
+      "datasource": { "type": "loki", "uid": "loki" },
+      "fieldConfig": {
+        "defaults": { "custom": { "align": "auto" } },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "conn_state" }, "properties": [{ "id": "displayName", "value": "연결 상태" },{ "id": "custom.width", "value": 120 }] },
+          { "matcher": { "id": "byName", "options": "Value" }, "properties": [{ "id": "displayName", "value": "건수" },{ "id": "custom.displayMode", "value": "color-background" }] }
+        ]
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 8 },
+      "id": 6,
+      "targets": [
+        {
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "sum by (conn_state) (count_over_time({job=\"zeek_conn\"}[$__range]))",
+          "legendFormat": "{{conn_state}}",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "title": "연결 상태 분포 (conn_state)",
+      "description": "SF=정상완료, S0=SYN만 전송(스캔), REJ=거부, RSTO=RST, OTH=기타",
+      "type": "table",
+      "transformations": [{ "id": "labelsToFields", "options": { "mode": "rows", "valueLabel": "conn_state" } }, { "id": "sortBy", "options": { "fields": [{ "desc": true, "displayName": "Value" }] } }]
+    },
+
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 16 },
+      "id": 101,
+      "title": "🔍 DNS 분석 (dns.log)",
+      "type": "row"
+    },
+
+    {
+      "datasource": { "type": "loki", "uid": "loki" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "custom": { "lineWidth": 1, "fillOpacity": 10 } }
+      },
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 17 },
+      "id": 7,
+      "targets": [
+        {
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "sum by (rcode_name) (count_over_time({job=\"zeek_dns\"}[$__interval]))",
+          "legendFormat": "{{rcode_name}}",
+          "refId": "A"
+        }
+      ],
+      "title": "DNS 응답 코드 추이",
+      "type": "timeseries"
+    },
+
+    {
+      "datasource": { "type": "loki", "uid": "loki" },
+      "fieldConfig": {
+        "defaults": { "custom": { "align": "auto" } },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "query" }, "properties": [{ "id": "displayName", "value": "도메인" },{ "id": "custom.width", "value": 280 }] },
+          { "matcher": { "id": "byName", "options": "Value" }, "properties": [{ "id": "displayName", "value": "쿼리 수" },{ "id": "custom.displayMode", "value": "color-background" }] }
+        ]
+      },
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 17 },
+      "id": 8,
+      "targets": [
+        {
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "topk(15, sum by (query) (count_over_time({job=\"zeek_dns\"} | json | __error__=\"\" | query != \"\" [$__range])))",
+          "legendFormat": "{{query}}",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "title": "Top 15 DNS 쿼리 도메인",
+      "type": "table",
+      "transformations": [{ "id": "labelsToFields", "options": { "mode": "rows", "valueLabel": "query" } }, { "id": "sortBy", "options": { "fields": [{ "desc": true, "displayName": "Value" }] } }, { "id": "limit", "options": { "limitField": 15 } }]
+    },
+
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 24 },
+      "id": 102,
+      "title": "🌐 HTTP 분석 (http.log)",
+      "type": "row"
+    },
+
+    {
+      "datasource": { "type": "loki", "uid": "loki" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "custom": { "lineWidth": 1, "fillOpacity": 10 } }
+      },
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 25 },
+      "id": 9,
+      "targets": [
+        {
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "sum by (version) (count_over_time({job=\"zeek_http\"} | json | version != \"\" [$__interval]))",
+          "legendFormat": "HTTP/{{version}}",
+          "refId": "A"
+        }
+      ],
+      "title": "HTTP 버전 분포 추이",
+      "type": "timeseries"
+    },
+
+    {
+      "datasource": { "type": "loki", "uid": "loki" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "custom": { "lineWidth": 1, "fillOpacity": 10 } }
+      },
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 25 },
+      "id": 10,
+      "targets": [
+        {
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "sum by (status_code) (count_over_time({job=\"zeek_http\"}[$__interval]))",
+          "legendFormat": "HTTP {{status_code}}",
+          "refId": "A"
+        }
+      ],
+      "title": "HTTP 상태 코드 추이",
+      "type": "timeseries"
+    },
+
+    {
+      "datasource": { "type": "loki", "uid": "loki" },
+      "fieldConfig": {
+        "defaults": { "custom": { "align": "auto" } },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "id_resp_h" }, "properties": [{ "id": "displayName", "value": "목적지 IP" },{ "id": "custom.width", "value": 240 }] },
+          { "matcher": { "id": "byName", "options": "Value" }, "properties": [{ "id": "displayName", "value": "요청 수" },{ "id": "custom.displayMode", "value": "color-background" }] }
+        ]
+      },
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 32 },
+      "id": 11,
+      "targets": [
+        {
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "topk(10, sum by (id_resp_h) (count_over_time({job=\"zeek_http\"} | json | __error__=\"\" | id_resp_h != \"\" [$__range])))",
+          "legendFormat": "{{id_resp_h}}",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "title": "Top 10 HTTP 목적지 IP",
+      "type": "table",
+      "transformations": [{ "id": "labelsToFields", "options": { "mode": "rows", "valueLabel": "id_resp_h" } }, { "id": "sortBy", "options": { "fields": [{ "desc": true, "displayName": "Value" }] } }, { "id": "limit", "options": { "limitField": 10 } }]
+    },
+
+    {
+      "datasource": { "type": "loki", "uid": "loki" },
+      "fieldConfig": {
+        "defaults": { "custom": { "align": "auto" } },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "id_resp_p" }, "properties": [{ "id": "displayName", "value": "목적지 포트" },{ "id": "custom.width", "value": 140 }] },
+          { "matcher": { "id": "byName", "options": "Value" }, "properties": [{ "id": "displayName", "value": "요청 수" },{ "id": "custom.displayMode", "value": "color-background" }] }
+        ]
+      },
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 32 },
+      "id": 12,
+      "targets": [
+        {
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "topk(10, sum by (id_resp_p) (count_over_time({job=\"zeek_http\"} | json | __error__=\"\" | id_resp_p != \"\" [$__range])))",
+          "legendFormat": "{{id_resp_p}}",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "title": "Top 10 HTTP 목적지 포트",
+      "type": "table",
+      "transformations": [{ "id": "labelsToFields", "options": { "mode": "rows", "valueLabel": "id_resp_p" } }, { "id": "sortBy", "options": { "fields": [{ "desc": true, "displayName": "Value" }] } }, { "id": "limit", "options": { "limitField": 10 } }]
+    },
+
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 39 },
+      "id": 103,
+      "title": "🔒 SSL/TLS 분석 (ssl.log)",
+      "type": "row"
+    },
+
+    {
+      "datasource": { "type": "loki", "uid": "loki" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "custom": { "lineWidth": 1, "fillOpacity": 10 } }
+      },
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 40 },
+      "id": 13,
+      "targets": [
+        {
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "sum by (version) (count_over_time({job=\"zeek_ssl\"}[$__interval]))",
+          "legendFormat": "{{version}}",
+          "refId": "A"
+        }
+      ],
+      "title": "TLS 버전 분포 추이",
+      "description": "TLSv1.0/1.1은 취약 버전 — 탐지 시 주의",
+      "type": "timeseries"
+    },
+
+    {
+      "datasource": { "type": "loki", "uid": "loki" },
+      "fieldConfig": {
+        "defaults": { "custom": { "align": "auto" } },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "id_resp_h" }, "properties": [{ "id": "displayName", "value": "목적지 IP" },{ "id": "custom.width", "value": 260 }] },
+          { "matcher": { "id": "byName", "options": "Value" }, "properties": [{ "id": "displayName", "value": "연결 수" },{ "id": "custom.displayMode", "value": "color-background" }] }
+        ]
+      },
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 40 },
+      "id": 14,
+      "targets": [
+        {
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "topk(10, sum by (id_resp_h) (count_over_time({job=\"zeek_ssl\"} | json | __error__=\"\" | id_resp_h != \"\" [$__range])))",
+          "legendFormat": "{{id_resp_h}}",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "title": "Top 10 TLS 목적지 IP",
+      "type": "table",
+      "transformations": [{ "id": "labelsToFields", "options": { "mode": "rows", "valueLabel": "id_resp_h" } }, { "id": "sortBy", "options": { "fields": [{ "desc": true, "displayName": "Value" }] } }, { "id": "limit", "options": { "limitField": 10 } }]
+    },
+
+    {
+      "datasource": { "type": "loki", "uid": "loki" },
+      "fieldConfig": {
+        "defaults": { "custom": { "align": "auto" } },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "cipher" }, "properties": [{ "id": "displayName", "value": "TLS Cipher" },{ "id": "custom.width", "value": 260 }] },
+          { "matcher": { "id": "byName", "options": "Value" }, "properties": [{ "id": "displayName", "value": "건수" },{ "id": "custom.displayMode", "value": "color-background" }] }
+        ]
+      },
+      "gridPos": { "h": 5, "w": 24, "x": 0, "y": 47 },
+      "id": 15,
+      "targets": [
+        {
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "sum by (cipher) (count_over_time({job=\"zeek_ssl\"} | json | cipher != \"\" [$__range]))",
+          "legendFormat": "{{cipher}}",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "title": "TLS Cipher 분포",
+      "description": "현재 수집되는 ssl.log 필드 기준으로 암호 스위트 분포를 표시",
+      "type": "table",
+      "transformations": [{ "id": "labelsToFields", "options": { "mode": "rows", "valueLabel": "cipher" } }, { "id": "sortBy", "options": { "fields": [{ "desc": true, "displayName": "Value" }] } }]
+    },
+
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 52 },
+      "id": 104,
+      "title": "🚨 보안 이벤트 (notice.log / weird.log)",
+      "type": "row"
+    },
+
+    {
+      "datasource": { "type": "loki", "uid": "loki" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "custom": { "lineWidth": 2, "fillOpacity": 15 } }
+      },
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 53 },
+      "id": 16,
+      "targets": [
+        {
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "sum by (note) (count_over_time({job=\"zeek_notice\"}[$__interval]))",
+          "legendFormat": "{{note}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Zeek Notice 유형별 추이",
+      "description": "HTTP::SQL_Injection_Attacker, Scan::Port_Scan, SSL::Certificate_Expired 등",
+      "type": "timeseries"
+    },
+
+    {
+      "datasource": { "type": "loki", "uid": "loki" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "custom": { "lineWidth": 1, "fillOpacity": 10 } }
+      },
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 53 },
+      "id": 17,
+      "targets": [
+        {
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "sum by (name) (count_over_time({job=\"zeek_weird\"}[$__interval]))",
+          "legendFormat": "{{name}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Weird 이벤트 유형별 추이",
+      "description": "프로토콜 위반, 비정상 패킷 시퀀스 등",
+      "type": "timeseries"
+    },
+
+    {
+      "datasource": { "type": "loki", "uid": "loki" },
+      "fieldConfig": {
+        "defaults": { "custom": { "align": "auto", "cellOptions": { "type": "auto" } } },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Time" }, "properties": [{ "id": "custom.width", "value": 160 }] },
+          { "matcher": { "id": "byName", "options": "note" }, "properties": [{ "id": "displayName", "value": "탐지 유형" },{ "id": "custom.width", "value": 260 }] },
+          { "matcher": { "id": "byName", "options": "peer_descr" }, "properties": [{ "id": "displayName", "value": "노드" },{ "id": "custom.width", "value": 140 }] },
+          { "matcher": { "id": "byName", "options": "msg" }, "properties": [{ "id": "displayName", "value": "메시지" }] }
+        ]
+      },
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 60 },
+      "id": 18,
+      "targets": [
+        {
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "{job=\"zeek_notice\"} | json | __error__=\"\" | line_format \"[{{.note}}] peer={{.peer_descr}} msg={{.msg}}\"",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "title": "최근 Zeek Notice 이벤트 (원문)",
+      "type": "logs",
+      "options": { "dedupStrategy": "none", "enableLogDetails": true, "prettifyLogMessage": false, "showCommonLabels": false, "showLabels": false, "showTime": true, "sortOrder": "Descending", "wrapLogMessage": false }
+    },
+
+    {
+      "datasource": { "type": "loki", "uid": "loki" },
+      "fieldConfig": {
+        "defaults": { "custom": { "align": "auto" } },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "name" }, "properties": [{ "id": "displayName", "value": "Weird 유형" },{ "id": "custom.width", "value": 260 }] },
+          { "matcher": { "id": "byName", "options": "Value" }, "properties": [{ "id": "displayName", "value": "발생 수" },{ "id": "custom.displayMode", "value": "color-background" }] }
+        ]
+      },
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 70 },
+      "id": 19,
+      "targets": [
+        {
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "topk(15, sum by (name) (count_over_time({job=\"zeek_weird\"}[$__range])))",
+          "legendFormat": "{{name}}",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "title": "Top 15 Weird 이벤트 유형",
+      "type": "table",
+      "transformations": [{ "id": "labelsToFields", "options": { "mode": "rows", "valueLabel": "name" } }, { "id": "sortBy", "options": { "fields": [{ "desc": true, "displayName": "Value" }] } }, { "id": "limit", "options": { "limitField": 15 } }]
+    },
+
+    {
+      "datasource": { "type": "loki", "uid": "loki" },
+      "fieldConfig": {
+        "defaults": { "custom": { "align": "auto" } },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "note" }, "properties": [{ "id": "displayName", "value": "탐지 유형" },{ "id": "custom.width", "value": 280 }] },
+          { "matcher": { "id": "byName", "options": "Value" }, "properties": [{ "id": "displayName", "value": "발생 수" },{ "id": "custom.displayMode", "value": "color-background" }] }
+        ]
+      },
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 70 },
+      "id": 20,
+      "targets": [
+        {
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "sum by (note) (count_over_time({job=\"zeek_notice\"}[$__range]))",
+          "legendFormat": "{{note}}",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "title": "Notice 유형 집계",
+      "type": "table",
+      "transformations": [{ "id": "labelsToFields", "options": { "mode": "rows", "valueLabel": "note" } }, { "id": "sortBy", "options": { "fields": [{ "desc": true, "displayName": "Value" }] } }]
+    }
+
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["zeek", "network", "nids", "security"],
+  "time": { "from": "now-6h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Zeek NIDS — 네트워크 행위 분석",
+  "uid": "zeek-nids-main",
+  "version": 1
+}

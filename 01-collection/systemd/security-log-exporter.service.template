@@ -1,0 +1,11 @@
+[Unit]
+Description=Security Log Exporter (ss, fail2ban, lastb, tailscale → Loki)
+After=network.target
+OnFailure=security-log-exporter-failure@%n.service
+
+[Service]
+Type=oneshot
+User=__USER__
+ExecStart=/usr/bin/python3 __COLLECTION_ROOT__/exporter/collector.py
+StandardOutput=journal
+StandardError=journal

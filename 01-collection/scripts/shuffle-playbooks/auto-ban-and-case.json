@@ -1,0 +1,58 @@
+{
+  "name": "SIEM-Trinity · Auto-Ban → Discord → TheHive Case",
+  "description": "ip_risk_scorer Critical → fail2ban banip → Discord 알림 → TheHive 케이스 자동 생성 (XDR 단계 5+6)",
+  "tags": ["siem-trinity", "auto-ban", "xdr-step5", "xdr-step6"],
+  "triggers": [
+    {
+      "id": "webhook-trigger",
+      "name": "ip_risk_scorer webhook",
+      "trigger_type": "WEBHOOK",
+      "status": "running",
+      "description": "POST 본문 예시: {\"ip\":\"x.x.x.x\",\"score\":95,\"signals\":{...}}"
+    }
+  ],
+  "actions": [
+    {
+      "id": "fail2ban-ban",
+      "name": "fail2ban banip",
+      "app_name": "Shell",
+      "app_version": "1.0.0",
+      "description": "fail2ban-client set sshd banip <IP> — ip 는 셸 도달 전 IP 문자셋으로 강제 필터링(빈 값이면 차단 미수행). Shell 앱 대신 전용 fail2ban 앱 사용 권장.",
+      "parameters": [
+        { "name": "command", "value": "fail2ban-client set sshd banip \"$(printf %s '$exec_argv.ip' | grep -oE '^[0-9a-fA-F:.]{3,45}$')\"" }
+      ]
+    },
+    {
+      "id": "discord-notify",
+      "name": "Discord 알림",
+      "app_name": "Discord",
+      "app_version": "1.0.0",
+      "description": "DISCORD_WEBHOOK_URL 노드 환경변수 필요",
+      "parameters": [
+        { "name": "webhook_url", "value": "$env.DISCORD_WEBHOOK_URL" },
+        { "name": "content", "value": "🔴 자동차단: IP=$exec_argv.ip score=$exec_argv.score" }
+      ]
+    },
+    {
+      "id": "thehive-create-case",
+      "name": "TheHive 케이스 생성",
+      "app_name": "TheHive5",
+      "app_version": "1.0.0",
+      "description": "THEHIVE_URL + THEHIVE_API_KEY 노드 환경변수 필요",
+      "parameters": [
+        { "name": "url", "value": "$env.THEHIVE_URL" },
+        { "name": "apikey", "value": "$env.THEHIVE_API_KEY" },
+        { "name": "title", "value": "SIEM-Trinity Auto-Ban — $exec_argv.ip" },
+        { "name": "severity", "value": "3" },
+        { "name": "tlp", "value": "2" },
+        { "name": "tags", "value": "siem-trinity,auto-ban" },
+        { "name": "description", "value": "score=$exec_argv.score, signals=$exec_argv.signals" }
+      ]
+    }
+  ],
+  "branches": [
+    { "source_id": "webhook-trigger", "destination_id": "fail2ban-ban" },
+    { "source_id": "fail2ban-ban",    "destination_id": "discord-notify" },
+    { "source_id": "discord-notify",  "destination_id": "thehive-create-case" }
+  ]
+}

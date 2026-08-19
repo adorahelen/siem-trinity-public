@@ -1,0 +1,49 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-base: 11 15 23;
+  --bg-surface: 19 26 38;
+  --bg-elevated: 27 36 51;
+  --border-subtle: 35 48 74;
+  --text-primary: 230 237 247;
+  --text-secondary: 154 167 189;
+  --accent-info: 56 189 248;
+  --accent-ok: 52 211 153;
+  --accent-warn: 251 191 36;
+  --accent-crit: 248 113 113;
+  --accent-brand: 167 139 250;
+
+  --sev-0: 56 189 248;
+  --sev-1: 96 165 250;
+  --sev-2: 251 191 36;
+  --sev-3: 251 146 60;
+  --sev-4: 248 113 113;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  font-family: Inter, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* react-grid-layout 다크 테마 ──────────────────────────── */
+.react-grid-item.react-grid-placeholder {
+  background: rgb(var(--accent-brand) / 0.2) !important;
+  border: 1px dashed rgb(var(--accent-brand)) !important;
+  border-radius: 12px;
+  opacity: 0.5;
+}
+.react-grid-item > .react-resizable-handle {
+  opacity: 0.5;
+  filter: invert(0.7);
+}
+.react-grid-item > .react-resizable-handle:hover {
+  opacity: 1;
+}

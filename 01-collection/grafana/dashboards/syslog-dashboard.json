@@ -1,0 +1,193 @@
+{
+  "title": "kangminlog 시스템 로그 (syslog)",
+  "uid": "syslog-main",
+  "timezone": "Asia/Seoul",
+  "refresh": "5m",
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "schemaVersion": 36,
+  "panels": [
+
+    {
+      "id": 1,
+      "title": "프로세스별 로그 빈도 (5m)",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "datasource": "Loki",
+          "expr": "sum by (process) (count_over_time({job=\"syslog\"} | regexp `(?P<process>[a-zA-Z0-9_\\-]+)\\[` [5m]))",
+          "legendFormat": "{{process}}"
+        }
+      ]
+    },
+
+    {
+      "id": 2,
+      "title": "전체 로그 볼륨 (5m)",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "datasource": "Loki",
+          "expr": "sum(count_over_time({job=\"syslog\"} [5m]))",
+          "legendFormat": "총 로그 수"
+        }
+      ]
+    },
+
+    {
+      "id": 3,
+      "title": "ERROR / WARNING 이벤트 추이 (5m)",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "datasource": "Loki",
+          "expr": "sum(count_over_time({job=\"syslog\"} |~ \"(?i)error\" [5m]))",
+          "legendFormat": "ERROR"
+        },
+        {
+          "datasource": "Loki",
+          "expr": "sum(count_over_time({job=\"syslog\"} |~ \"(?i)warning\" [5m]))",
+          "legendFormat": "WARNING"
+        }
+      ]
+    },
+
+    {
+      "id": 4,
+      "title": "cron 실행 이벤트 추이 (5m)",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "datasource": "Loki",
+          "expr": "sum(count_over_time({job=\"syslog\"} |= \"CRON\" [5m]))",
+          "legendFormat": "cron 실행"
+        }
+      ]
+    },
+
+    {
+      "id": 5,
+      "title": "systemd 서비스 시작/중지 이벤트 추이 (5m)",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 16, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "datasource": "Loki",
+          "expr": "sum(count_over_time({job=\"syslog\"} |= \"Started\" [5m]))",
+          "legendFormat": "Started"
+        },
+        {
+          "datasource": "Loki",
+          "expr": "sum(count_over_time({job=\"syslog\"} |= \"Stopped\" [5m]))",
+          "legendFormat": "Stopped"
+        },
+        {
+          "datasource": "Loki",
+          "expr": "sum(count_over_time({job=\"syslog\"} |= \"Failed\" [5m]))",
+          "legendFormat": "Failed"
+        }
+      ]
+    },
+
+    {
+      "id": 6,
+      "title": "네트워크 이벤트 추이 (5m)",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 16, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "datasource": "Loki",
+          "expr": "sum(count_over_time({job=\"syslog\"} |~ \"(?i)(dhcp|network|interface|link)\" [5m]))",
+          "legendFormat": "네트워크 관련"
+        }
+      ]
+    },
+
+    {
+      "id": 7,
+      "title": "ERROR / WARNING 최근 로그",
+      "type": "logs",
+      "gridPos": { "x": 0, "y": 24, "w": 24, "h": 10 },
+      "options": {
+        "dedupStrategy": "none",
+        "showLabels": false,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "targets": [
+        {
+          "datasource": "Loki",
+          "expr": "{job=\"syslog\"} |~ \"(?i)(error|warning|fail|critical)\""
+        }
+      ]
+    },
+
+    {
+      "id": 8,
+      "title": "systemd Failed 서비스 최근 로그",
+      "type": "logs",
+      "gridPos": { "x": 0, "y": 34, "w": 12, "h": 8 },
+      "options": {
+        "dedupStrategy": "none",
+        "showLabels": false,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "targets": [
+        {
+          "datasource": "Loki",
+          "expr": "{job=\"syslog\"} |= \"Failed\""
+        }
+      ]
+    },
+
+    {
+      "id": 9,
+      "title": "cron 최근 실행 이력",
+      "type": "logs",
+      "gridPos": { "x": 12, "y": 34, "w": 12, "h": 8 },
+      "options": {
+        "dedupStrategy": "none",
+        "showLabels": false,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "targets": [
+        {
+          "datasource": "Loki",
+          "expr": "{job=\"syslog\"} |= \"CRON\""
+        }
+      ]
+    },
+
+    {
+      "id": 10,
+      "title": "전체 syslog 스트림",
+      "type": "logs",
+      "gridPos": { "x": 0, "y": 42, "w": 24, "h": 10 },
+      "options": {
+        "dedupStrategy": "none",
+        "showLabels": false,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "targets": [
+        {
+          "datasource": "Loki",
+          "expr": "{job=\"syslog\"}"
+        }
+      ]
+    }
+
+  ]
+}

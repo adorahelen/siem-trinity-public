@@ -1,0 +1,11 @@
+requests
+python-dotenv
+scikit-learn
+scipy
+numpy
+pandas
+joblib
+rich
+fastapi
+uvicorn[standard]
+apscheduler>=3.10,<4.0

@@ -1,0 +1,68 @@
+# SIEM-Trinity auditd 룰셋
+# 적용: /etc/audit/rules.d/siem-trinity.rules 로 복사 → augenrules --load
+# 참고: https://github.com/Neo23x0/auditd / https://documentation.wazuh.com/
+
+# ─────────────────────────────────────────────
+# 기본 설정
+# ─────────────────────────────────────────────
+# 큐 버퍼 크기
+-b 8192
+# 실패 시 동작 (1=출력만)
+-f 1
+# 자체 audit 이벤트 무시
+-a never,exit -F arch=b64 -S all -F exe=/usr/sbin/auditd
+
+# ─────────────────────────────────────────────
+# 권한 상승 (suid/sgid 실행)
+# ─────────────────────────────────────────────
+-a always,exit -F arch=b64 -S execve -F euid=0 -F auid>=1000 -F auid!=4294967295 -k suid_exec
+-a always,exit -F arch=b32 -S execve -F euid=0 -F auid>=1000 -F auid!=4294967295 -k suid_exec
+
+# ─────────────────────────────────────────────
+# 중요 파일 변경 모니터링
+# ─────────────────────────────────────────────
+-w /etc/passwd -p wa -k identity
+-w /etc/group -p wa -k identity
+-w /etc/shadow -p wa -k identity
+-w /etc/sudoers -p wa -k identity
+-w /etc/sudoers.d/ -p wa -k identity
+
+# ─────────────────────────────────────────────
+# SSH 설정 변경
+# ─────────────────────────────────────────────
+-w /etc/ssh/sshd_config -p wa -k sshd_config
+-w /root/.ssh -p wa -k ssh_keys
+-w /home -p wa -k ssh_keys
+
+# ─────────────────────────────────────────────
+# 시스템 시간 변경 (정상 변경 외 알림)
+# ─────────────────────────────────────────────
+-a always,exit -F arch=b64 -S adjtimex,settimeofday,clock_settime -k time_change
+-a always,exit -F arch=b32 -S adjtimex,settimeofday,clock_settime -k time_change
+
+# ─────────────────────────────────────────────
+# 네트워크 설정 변경
+# ─────────────────────────────────────────────
+-w /etc/hosts -p wa -k network
+-w /etc/network/ -p wa -k network
+-w /etc/netplan/ -p wa -k network
+-w /etc/resolv.conf -p wa -k network
+
+# ─────────────────────────────────────────────
+# 커널 모듈 로드/언로드
+# ─────────────────────────────────────────────
+-a always,exit -F arch=b64 -S init_module,finit_module,delete_module -k modules
+-w /etc/modprobe.conf -p wa -k modules
+-w /etc/modprobe.d/ -p wa -k modules
+
+# ─────────────────────────────────────────────
+# Docker / containerd 설정
+# ─────────────────────────────────────────────
+-w /etc/docker -p wa -k docker_config
+-w /var/lib/docker -p wa -k docker_data
+-w /etc/containerd -p wa -k docker_config
+
+# ─────────────────────────────────────────────
+# 규칙 자체 변경 금지 (재부팅 전엔 못 바꿈)
+# ─────────────────────────────────────────────
+-e 2

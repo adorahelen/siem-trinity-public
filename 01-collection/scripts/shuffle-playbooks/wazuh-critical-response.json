@@ -1,0 +1,57 @@
+{
+  "name": "SIEM-Trinity · Wazuh Critical → Active-Response + Case",
+  "description": "Wazuh level>=12 알림 → active-response firewall-drop + Discord + TheHive 케이스",
+  "tags": ["siem-trinity", "wazuh", "active-response", "xdr-step3", "xdr-step5"],
+  "triggers": [
+    {
+      "id": "wazuh-webhook",
+      "name": "Wazuh critical webhook",
+      "trigger_type": "WEBHOOK",
+      "status": "running",
+      "description": "Wazuh integration POST body: {\"agent\":..., \"rule\":..., \"data\":...}"
+    }
+  ],
+  "actions": [
+    {
+      "id": "wazuh-active-response",
+      "name": "Wazuh active-response (firewall-drop)",
+      "app_name": "Wazuh",
+      "app_version": "1.0.0",
+      "description": "WAZUH_API + WAZUH_TOKEN 노드 환경변수 필요",
+      "parameters": [
+        { "name": "url", "value": "$env.WAZUH_API/active-response" },
+        { "name": "command", "value": "firewall-drop" },
+        { "name": "agent_id", "value": "$exec_argv.agent.id" },
+        { "name": "arguments", "value": "$exec_argv.data.srcip" }
+      ]
+    },
+    {
+      "id": "discord-notify",
+      "name": "Discord 알림",
+      "app_name": "Discord",
+      "parameters": [
+        { "name": "webhook_url", "value": "$env.DISCORD_WEBHOOK_URL" },
+        { "name": "content", "value": "🛡 Wazuh Critical: rule=$exec_argv.rule.id agent=$exec_argv.agent.name srcip=$exec_argv.data.srcip" }
+      ]
+    },
+    {
+      "id": "thehive-create-case",
+      "name": "TheHive 케이스 생성",
+      "app_name": "TheHive5",
+      "parameters": [
+        { "name": "url", "value": "$env.THEHIVE_URL" },
+        { "name": "apikey", "value": "$env.THEHIVE_API_KEY" },
+        { "name": "title", "value": "Wazuh Critical — rule $exec_argv.rule.id" },
+        { "name": "severity", "value": "4" },
+        { "name": "tlp", "value": "2" },
+        { "name": "tags", "value": "siem-trinity,wazuh,active-response" },
+        { "name": "description", "value": "$exec_argv.rule.description\n\nagent=$exec_argv.agent.name\nsrcip=$exec_argv.data.srcip\nlevel=$exec_argv.rule.level" }
+      ]
+    }
+  ],
+  "branches": [
+    { "source_id": "wazuh-webhook",          "destination_id": "wazuh-active-response" },
+    { "source_id": "wazuh-active-response",  "destination_id": "discord-notify" },
+    { "source_id": "discord-notify",         "destination_id": "thehive-create-case" }
+  ]
+}

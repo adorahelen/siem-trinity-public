@@ -1,0 +1,45 @@
+services:
+  detection-api:
+    build: .
+    container_name: detection-api
+    restart: unless-stopped
+    # root .env 가 모든 런타임 env 의 단일 출처.
+    # XDR 통합으로 추가된 모든 변수 (AUTO_BAN/MISP/SHUFFLE/THEHIVE/Discord/THEHIVE_PUBLIC_URL) 는
+    # 02-detection/.env 별도 작성 없이 root .env 가 자동 적용됨.
+    env_file:
+      - ../.env
+    ports:
+      - "${HOST_BIND_IP:-127.0.0.1}:2027:8000"
+    volumes:
+      - ./reports:/app/reports
+      - ./models:/app/models
+      # 호스트 /proc 마운트 — 시스템 정보 BFF 가 호스트 listen 포트·CPU 모델 읽기 위함 (read-only)
+      - /proc:/host/proc:ro
+      # 호스트 /sys — 온도/팬/RAPL 전력. VM 환경에선 비어있어도 OK (코드가 부재 감지)
+      - /sys:/host/sys:ro
+    # 컨테이너 고정값만 environment: 에 남김.
+    # ${VAR:-default} 형태로 .env 변수를 다시 환산하면 env_file 의 실값을 빈 default 가 덮어쓰는 부작용 있어 제거.
+    environment:
+      TZ: Asia/Seoul
+      LOKI_URL: http://loki:3100
+      ALERT_LOG_PATH: /app/reports
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    networks:
+      - siem-internal
+      - loki-net
+      - intelligence-net   # detection-api → intelligence-ollama LLM 호출
+
+networks:
+  siem-internal:
+    driver: bridge
+  loki-net:
+    external: true
+    name: ${LOKI_NETWORK_NAME:-siem-trinity_default}
+  intelligence-net:
+    external: true
+    name: ${INTELLIGENCE_NETWORK_NAME:-03-intelligence_intelligence-internal}

@@ -1,0 +1,314 @@
+{
+  "title": "kangminlog MASTER",
+  "uid": "master-main",
+  "timezone": "Asia/Seoul",
+  "refresh": "5m",
+  "time": { "from": "now-24h", "to": "now" },
+  "schemaVersion": 36,
+  "panels": [
+
+    { "id": 100, "title": "헬스 체크", "type": "row", "collapsed": false,
+      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 1 } },
+
+    {
+      "id": 1, "title": "CPU 사용률",
+      "type": "stat", "gridPos": { "x": 0, "y": 1, "w": 4, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent", "min": 0, "max": 100,
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green", "value": null },
+            { "color": "yellow", "value": 70 },
+            { "color": "red", "value": 90 }
+          ]}
+        }, "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none", "orientation": "auto" },
+      "targets": [{ "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "expr": "100 - (avg(rate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)",
+        "legendFormat": "CPU", "refId": "A" }]
+    },
+
+    {
+      "id": 2, "title": "메모리 사용률",
+      "type": "stat", "gridPos": { "x": 4, "y": 1, "w": 4, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent", "min": 0, "max": 100,
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green", "value": null },
+            { "color": "yellow", "value": 70 },
+            { "color": "red", "value": 90 }
+          ]}
+        }, "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
+      "targets": [{ "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "expr": "100 * (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes))",
+        "legendFormat": "메모리", "refId": "A" }]
+    },
+
+    {
+      "id": 3, "title": "디스크 사용률",
+      "type": "gauge", "gridPos": { "x": 8, "y": 1, "w": 4, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent", "min": 0, "max": 100,
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green", "value": null },
+            { "color": "yellow", "value": 70 },
+            { "color": "red", "value": 90 }
+          ]}
+        }, "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "showThresholdLabels": false, "showThresholdMarkers": true },
+      "targets": [{ "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "expr": "100 * (1 - (node_filesystem_avail_bytes{mountpoint=\"/\"} / node_filesystem_size_bytes{mountpoint=\"/\"}))",
+        "legendFormat": "/ 사용률", "refId": "A" }]
+    },
+
+    {
+      "id": 4, "title": "fail2ban 현재 차단 IP 수",
+      "type": "stat", "gridPos": { "x": 12, "y": 1, "w": 4, "h": 4 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green", "value": null },
+            { "color": "yellow", "value": 5 },
+            { "color": "red", "value": 20 }
+          ]}
+        }, "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
+      "targets": [{ "datasource": { "type": "loki", "uid": "loki" },
+        "expr": "sum(count_over_time({job=\"fail2ban\", f2b_action=\"Ban\"} [24h])) - sum(count_over_time({job=\"fail2ban\", f2b_action=\"Unban\"} [24h]))",
+        "legendFormat": "차단 IP", "refId": "A", "queryType": "instant" }]
+    },
+
+    {
+      "id": 5, "title": "Wazuh High 알림 (오늘)",
+      "type": "stat", "gridPos": { "x": 16, "y": 1, "w": 4, "h": 4 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green", "value": null },
+            { "color": "yellow", "value": 3 },
+            { "color": "red", "value": 10 }
+          ]}
+        }, "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["sum"] }, "colorMode": "background", "graphMode": "none" },
+      "targets": [{ "datasource": { "type": "loki", "uid": "loki" },
+        "expr": "sum(count_over_time({job=\"wazuh\", level=~\"([7-9]|1[0-5])\"}[24h]))",
+        "legendFormat": "Wazuh High", "refId": "A", "queryType": "instant" }]
+    },
+
+    {
+      "id": 6, "title": "Suricata 알림 (오늘)",
+      "type": "stat", "gridPos": { "x": 20, "y": 1, "w": 4, "h": 4 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green", "value": null },
+            { "color": "yellow", "value": 5 },
+            { "color": "red", "value": 20 }
+          ]}
+        }, "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["sum"] }, "colorMode": "background", "graphMode": "none" },
+      "targets": [{ "datasource": { "type": "loki", "uid": "loki" },
+        "expr": "sum(count_over_time({job=\"suricata\"} | json | event_type=\"alert\" [24h]))",
+        "legendFormat": "Suricata", "refId": "A", "queryType": "instant" }]
+    },
+
+    {
+      "id": 7, "title": "포트 노출 현황 (ss)",
+      "type": "logs", "gridPos": { "x": 0, "y": 5, "w": 12, "h": 5 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "options": { "showTime": true, "showLabels": false, "wrapLogMessage": true, "sortOrder": "Descending", "dedupStrategy": "none" },
+      "targets": [{ "datasource": { "type": "loki", "uid": "loki" },
+        "expr": "{job=\"ss_ports\"}", "refId": "A" }]
+    },
+
+    {
+      "id": 8, "title": "Tailscale 연결 상태",
+      "type": "logs", "gridPos": { "x": 12, "y": 5, "w": 12, "h": 5 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "options": { "showTime": true, "showLabels": false, "wrapLogMessage": true, "sortOrder": "Descending", "dedupStrategy": "none" },
+      "targets": [{ "datasource": { "type": "loki", "uid": "loki" },
+        "expr": "{job=\"tailscale_status\"}", "refId": "A" }]
+    },
+
+    { "id": 200, "title": "공격 탐지", "type": "row", "collapsed": false,
+      "gridPos": { "x": 0, "y": 10, "w": 24, "h": 1 } },
+
+    {
+      "id": 20, "title": "SSH 공격 + fail2ban Ban 통합 추이 (5m)",
+      "type": "timeseries", "gridPos": { "x": 0, "y": 11, "w": 12, "h": 8 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "targets": [
+        { "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "sum(count_over_time({job=\"auth\"} |= \"Invalid user\" [5m]))",
+          "legendFormat": "SSH Invalid user", "refId": "A" },
+        { "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "sum(count_over_time({job=\"fail2ban\", f2b_action=\"Ban\"} [5m]))",
+          "legendFormat": "fail2ban Ban", "refId": "B" },
+        { "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "sum(count_over_time({job=\"kern\", kern_event=\"[KR-BLOCK]\"} [5m]))",
+          "legendFormat": "KR-BLOCK 차단", "refId": "C" }
+      ]
+    },
+
+    {
+      "id": 21, "title": "Wazuh + Suricata 알림 통합 추이 (5m)",
+      "type": "timeseries", "gridPos": { "x": 12, "y": 11, "w": 12, "h": 8 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "targets": [
+        { "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "sum(count_over_time({job=\"wazuh\", level=~\"([7-9]|1[0-5])\"}[5m]))",
+          "legendFormat": "Wazuh High (7+)", "refId": "A" },
+        { "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "sum(count_over_time({job=\"suricata\"} | json | event_type=\"alert\" | alert_severity=\"1\" [5m]))",
+          "legendFormat": "Suricata Critical", "refId": "B" },
+        { "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "sum(count_over_time({job=\"suricata\"} | json | event_type=\"alert\" | alert_severity=\"2\" [5m]))",
+          "legendFormat": "Suricata High", "refId": "C" }
+      ]
+    },
+
+    {
+      "id": 22, "title": "Top 공격 IP — SSH + fail2ban + Suricata 통합 (24h)",
+      "type": "table", "gridPos": { "x": 0, "y": 19, "w": 10, "h": 10 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "options": { "showHeader": true, "sortBy": [{ "displayName": "Value", "desc": true }] },
+      "targets": [{ "datasource": { "type": "loki", "uid": "loki" },
+        "expr": "topk(20, sum by (src_ip) (count_over_time({job=\"auth\"} |= \"Invalid user\" [24h])))",
+        "legendFormat": "{{src_ip}}", "refId": "A", "queryType": "instant" }]
+    },
+
+    {
+      "id": 23, "title": "공격 출처 세계지도 (GeoIP)",
+      "type": "geomap", "gridPos": { "x": 10, "y": 19, "w": 14, "h": 10 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "options": {
+        "view": { "id": "zero", "lat": 0, "lon": 0, "zoom": 1 },
+        "controls": { "showZoom": true, "mouseWheelZoom": true },
+        "layers": [{ "type": "markers", "name": "Visitor IPs",
+          "config": { "style": { "size": { "fixed": 8 }, "color": { "fixed": "red" }, "opacity": 0.8 } },
+          "location": { "mode": "coords", "latitude": "lat", "longitude": "lon" }, "tooltip": true }],
+        "tooltip": { "mode": "details" }
+      },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "targets": [{ "datasource": { "type": "loki", "uid": "loki" },
+        "expr": "{job=\"nginx_visitors_geo\"} |= \"client_type=\"", "refId": "A" }],
+      "transformations": [
+        { "id": "extractFields", "options": { "source": "Line", "format": "kvp", "replace": true } },
+        { "id": "convertFieldType", "options": { "conversions": [
+          { "targetField": "lat", "destinationType": "number" },
+          { "targetField": "lon", "destinationType": "number" }
+        ]}}
+      ]
+    },
+
+    { "id": 300, "title": "웹 / 네트워크", "type": "row", "collapsed": true,
+      "gridPos": { "x": 0, "y": 29, "w": 24, "h": 1 } ,
+      "panels": [
+        {
+          "id": 30, "title": "Nginx 상태코드 + WAF 탐지 (5m)",
+          "type": "timeseries", "gridPos": { "x": 0, "y": 30, "w": 12, "h": 8 },
+          "targets": [
+            { "datasource": "Loki", "expr": "sum by (status_code) (count_over_time({job=\"nginx_access\", status_code=~\"4..|5..\"} [5m]))", "legendFormat": "{{status_code}}", "refId": "A" },
+            { "datasource": "Loki", "expr": "sum(count_over_time({job=\"modsec\"} [5m]))", "legendFormat": "WAF 탐지", "refId": "B" }
+          ]
+        },
+        {
+          "id": 31, "title": "DNS 쿼리 추이 (5m)",
+          "type": "timeseries", "gridPos": { "x": 12, "y": 30, "w": 12, "h": 8 },
+          "targets": [
+            { "datasource": "Loki", "expr": "sum(count_over_time({job=\"zeek_dns\"} [5m]))", "legendFormat": "DNS 쿼리", "refId": "A" }
+          ]
+        },
+        {
+          "id": 32, "title": "Top 15 DNS 도메인 (24h)",
+          "type": "table", "gridPos": { "x": 0, "y": 38, "w": 12, "h": 8 },
+          "targets": [
+            { "datasource": { "type": "loki", "uid": "loki" },
+              "expr": "topk(15, sum by (query) (count_over_time({job=\"zeek_dns\"} | json | __error__=\"\" [24h])))",
+              "legendFormat": "{{query}}", "refId": "A", "queryType": "instant" }
+          ]
+        },
+        {
+          "id": 33, "title": "Zeek Notice/Weird 보안 이벤트 (5m)",
+          "type": "timeseries", "gridPos": { "x": 12, "y": 38, "w": 12, "h": 8 },
+          "targets": [
+            { "datasource": "Loki", "expr": "sum(count_over_time({job=\"zeek_notice\"} [5m]))", "legendFormat": "Notice", "refId": "A" },
+            { "datasource": "Loki", "expr": "sum(count_over_time({job=\"zeek_weird\"} [5m]))", "legendFormat": "Weird", "refId": "B" }
+          ]
+        },
+        {
+          "id": 34, "title": "웹 방문 IP 목록 (24h)",
+          "type": "table", "gridPos": { "x": 0, "y": 46, "w": 24, "h": 8 },
+          "datasource": { "type": "loki", "uid": "loki" },
+          "options": { "showHeader": true },
+          "targets": [{ "datasource": { "type": "loki", "uid": "loki" },
+            "expr": "{job=\"nginx_visitors_geo\"} |= \"client_type=\"", "refId": "A" }],
+          "transformations": [
+            { "id": "extractFields", "options": { "source": "Line", "format": "kvp", "replace": true } },
+            { "id": "organize", "options": { "excludeByName": { "Time": true, "tsNs": true, "labels": true, "id": true },
+              "indexByName": { "src_ip": 0, "request_count": 1, "country": 2, "city": 3, "client_type": 4 }}}
+          ]
+        }
+      ]
+    },
+
+    { "id": 400, "title": "시스템 무결성", "type": "row", "collapsed": true,
+      "gridPos": { "x": 0, "y": 30, "w": 24, "h": 1 },
+      "panels": [
+        {
+          "id": 40, "title": "커널 치명 이벤트 (OOM / segfault / panic)",
+          "type": "logs", "gridPos": { "x": 0, "y": 31, "w": 12, "h": 8 },
+          "options": { "showTime": true, "showLabels": false, "wrapLogMessage": true, "sortOrder": "Descending", "dedupStrategy": "none" },
+          "targets": [{ "datasource": "Loki",
+            "expr": "{job=\"kern\"} |~ \"OOM|segfault|Call Trace|BUG:|panic|Out of memory\"" }]
+        },
+        {
+          "id": 41, "title": "최근 Wazuh High 알림",
+          "type": "logs", "gridPos": { "x": 12, "y": 31, "w": 12, "h": 8 },
+          "options": { "showTime": true, "showLabels": false, "wrapLogMessage": true, "sortOrder": "Descending", "dedupStrategy": "none" },
+          "targets": [{ "datasource": { "type": "loki", "uid": "loki" },
+            "expr": "{job=\"wazuh\", level=~\"([7-9]|1[0-5])\"}", "refId": "A" }]
+        },
+        {
+          "id": 42, "title": "패키지 변경 이력 (dpkg + apt)",
+          "type": "logs", "gridPos": { "x": 0, "y": 39, "w": 12, "h": 7 },
+          "options": { "showTime": true, "showLabels": false, "wrapLogMessage": true, "sortOrder": "Descending", "dedupStrategy": "none" },
+          "targets": [
+            { "datasource": "Loki", "expr": "{job=\"dpkg\"}", "refId": "A" },
+            { "datasource": "Loki", "expr": "{job=\"apt\"}", "refId": "B" }
+          ]
+        },
+        {
+          "id": 43, "title": "syslog ERROR/WARNING + Failed 서비스",
+          "type": "logs", "gridPos": { "x": 12, "y": 39, "w": 12, "h": 7 },
+          "options": { "showTime": true, "showLabels": false, "wrapLogMessage": true, "sortOrder": "Descending", "dedupStrategy": "none" },
+          "targets": [{ "datasource": "Loki",
+            "expr": "{job=\"syslog\"} |~ \"(?i)(error|warning|failed)\"", "refId": "A" }]
+        },
+        {
+          "id": 44, "title": "PostgreSQL ERROR / FATAL",
+          "type": "logs", "gridPos": { "x": 0, "y": 46, "w": 24, "h": 6 },
+          "options": { "showTime": true, "showLabels": false, "wrapLogMessage": true, "sortOrder": "Descending", "dedupStrategy": "none" },
+          "targets": [{ "datasource": "Loki",
+            "expr": "{job=\"postgresql\", pg_level=~\"ERROR|FATAL|PANIC\"}", "refId": "A" }]
+        }
+      ]
+    }
+
+  ]
+}

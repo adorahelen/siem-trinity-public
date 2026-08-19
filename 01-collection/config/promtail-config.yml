@@ -1,0 +1,281 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+
+  # auth.log: src_ip, username, action 추출
+  # username 은 라벨 승격 제거 (#104) — 카디널리티 폭증 방지.
+  # 쿼리 시 `{job="auth"} | regexp "..."` 로 추출.
+  - job_name: auth
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: auth
+          host: kangminlog
+          __path__: /var/log/auth.log
+    pipeline_stages:
+      - regex:
+          expression: '(?P<action>Failed|Accepted|Invalid user|Disconnected|session opened|session closed)[^\n]*?(?:from (?P<src_ip>\d+\.\d+\.\d+\.\d+))?'
+      - labels:
+          action:
+          src_ip:
+
+  # ufw.log: SRC, DST, DPT, PROTO 추출
+  - job_name: ufw
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: ufw
+          host: kangminlog
+          __path__: /var/log/ufw.log
+    pipeline_stages:
+      - regex:
+          expression: '\[UFW (?P<ufw_action>\w+)\].*SRC=(?P<src_ip>\S+) DST=(?P<dst_ip>\S+).*PROTO=(?P<proto>\w+)(?:.*DPT=(?P<dpt>\d+))?'
+      - labels:
+          ufw_action:
+          src_ip:
+          proto:
+          dpt:
+
+  # fail2ban: jail, banned_ip, action 추출
+  - job_name: fail2ban
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: fail2ban
+          host: kangminlog
+          __path__: /var/log/fail2ban.log
+    pipeline_stages:
+      - regex:
+          expression: 'fail2ban\.(?P<jail>\w+)\s+\[.*?\]\s+(?P<f2b_action>Ban|Unban|WARNING|NOTICE|INFO)\s*(?P<banned_ip>\d+\.\d+\.\d+\.\d+)?'
+      - labels:
+          jail:
+          f2b_action:
+          banned_ip:
+
+  # syslog
+  - job_name: syslog
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: syslog
+          host: kangminlog
+          __path__: /var/log/syslog
+
+  # ModSecurity WAF audit log (Phase 7)
+  # msg/data 는 라벨 승격 제거 (#104) — 자연어 텍스트로 카디 무한.
+  # rule_id 도 라벨에서 빼고 라인 본문에 둠 (수십~수백 카디).
+  # 쿼리 시 `{job="modsec"} | regexp "..."` 로 rule_id/msg 추출.
+  - job_name: modsec
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: modsec
+          host: kangminlog
+          __path__: /var/log/nginx/modsec_audit.log
+    pipeline_stages:
+      - regex:
+          expression: 'ModSecurity: (?P<modsec_action>Warning|Access denied)'
+      - labels:
+          modsec_action:
+
+  # Wazuh alerts.json → Loki
+  - job_name: wazuh
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: wazuh
+          host: kangminlog
+          __path__: /wazuh-data/logs/alerts/alerts.json
+    pipeline_stages:
+      - json:
+          expressions:
+            level: rule.level
+            rule_id: rule.id
+            description: rule.description
+            agent_name: agent.name
+            src_ip: data.srcip
+      - labels:
+          level:
+          rule_id:
+          agent_name:
+
+  # dpkg.log: 패키지 설치/제거 탐지
+  - job_name: dpkg
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: dpkg
+          host: kangminlog
+          __path__: /var/log/dpkg.log
+    pipeline_stages:
+      - regex:
+          expression: '^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} (?P<dpkg_action>install|remove|purge|configure|upgrade|trigproc|startup) (?P<package>[^\s:]+)'
+      - labels:
+          dpkg_action:
+          package:
+
+  # apt/history.log: 무단 APT 명령 이력
+  - job_name: apt
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: apt
+          host: kangminlog
+          __path__: /var/log/apt/history.log
+
+  # kern.log: 커널 이상/rootkit 탐지 + 커널 레벨 방화벽 차단 추출
+  - job_name: kern
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: kern
+          host: kangminlog
+          __path__: /var/log/kern.log
+    pipeline_stages:
+      - regex:
+          expression: 'kernel: (?P<kern_event>\[(?:UFW [A-Z]+|KR-BLOCK)\]|OOM|segfault|Call Trace|BUG:|panic|Out of memory)(?:.*SRC=(?P<src_ip>\S+))?(?:.*DST=(?P<dst_ip>\S+))?(?:.*PROTO=(?P<proto>\w+))?(?:.*DPT=(?P<dpt>\d+))?'
+      - labels:
+          kern_event:
+          src_ip:
+          dst_ip:
+          proto:
+          dpt:
+
+  # postgresql: SQL Injection 및 DB 이상 탐지
+  - job_name: postgresql
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: postgresql
+          host: kangminlog
+          __path__: /var/log/postgresql/postgresql-16-main.log
+    pipeline_stages:
+      - regex:
+          expression: '\[\d+\] (?P<pg_level>LOG|ERROR|WARNING|FATAL|PANIC|DETAIL|HINT):'
+      - labels:
+          pg_level:
+
+  # Suricata EVE JSON: IDS 알림, DNS, HTTP, TLS 이벤트
+  # 쿼리 시 | json 으로 파싱 — 라벨은 job/host만 유지
+  - job_name: suricata
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: suricata
+          host: kangminlog
+          __path__: /var/log/suricata/eve.json
+
+  # =====================================================
+  # Zeek NIDS 로그 (JSON 포맷, /opt/zeek/logs/current/)
+  # 모든 job은 | json 으로 파싱 — 라벨은 job/host만 유지
+  # =====================================================
+
+  # conn.log: TCP/UDP/ICMP 연결 기록 (src/dst IP·port, proto, bytes, duration)
+  - job_name: zeek_conn
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: zeek_conn
+          host: kangminlog
+          __path__: /zeek-logs/current/conn.log
+    pipeline_stages:
+      - json:
+          expressions:
+            proto: proto
+            src_ip: "id.orig_h"
+            dst_ip: "id.resp_h"
+            conn_state: conn_state
+            service: service
+      - labels:
+          proto:
+          conn_state:
+          service:
+
+  # dns.log: DNS 쿼리/응답 (도메인, 쿼리타입, 응답코드)
+  - job_name: zeek_dns
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: zeek_dns
+          host: kangminlog
+          __path__: /zeek-logs/current/dns.log
+    pipeline_stages:
+      - json:
+          expressions:
+            qtype_name: qtype_name
+            rcode_name: rcode_name
+      - labels:
+          qtype_name:
+          rcode_name:
+
+  # http.log: HTTP 요청/응답 (메서드, URI, 호스트, 상태코드, User-Agent)
+  - job_name: zeek_http
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: zeek_http
+          host: kangminlog
+          __path__: /zeek-logs/current/http.log
+    pipeline_stages:
+      - json:
+          expressions:
+            method: method
+            status_code: status_code
+      - labels:
+          method:
+          status_code:
+
+  # ssl.log: TLS 핸드셰이크 (버전, 암호스위트, SNI, 인증서 상태)
+  - job_name: zeek_ssl
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: zeek_ssl
+          host: kangminlog
+          __path__: /zeek-logs/current/ssl.log
+    pipeline_stages:
+      - json:
+          expressions:
+            version: version
+            validation_status: validation_status
+      - labels:
+          version:
+          validation_status:
+
+  # notice.log: Zeek 보안 탐지 이벤트 (SQLi, 포트스캔, 인증서 만료 등)
+  - job_name: zeek_notice
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: zeek_notice
+          host: kangminlog
+          __path__: /zeek-logs/current/notice.log
+    pipeline_stages:
+      - json:
+          expressions:
+            note: note
+      - labels:
+          note:
+
+  # weird.log: 프로토콜 이상 행위 (예상치 못한 패킷, 프로토콜 위반)
+  - job_name: zeek_weird
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: zeek_weird
+          host: kangminlog
+          __path__: /zeek-logs/current/weird.log
+    pipeline_stages:
+      - json:
+          expressions:
+            name: name
+      - labels:
+          name:

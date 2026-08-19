@@ -1,0 +1,10 @@
+[Unit]
+Description=Security Log Exporter 5분 주기 실행
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=5min
+Unit=security-log-exporter.service
+
+[Install]
+WantedBy=timers.target

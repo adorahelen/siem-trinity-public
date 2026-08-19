@@ -1,0 +1,9 @@
+requests
+python-dotenv
+scikit-learn
+scipy
+numpy
+pandas
+lightgbm
+joblib
+rich

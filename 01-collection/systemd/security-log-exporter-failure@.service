@@ -1,0 +1,7 @@
+[Unit]
+Description=Notify on security-log-exporter failure
+
+[Service]
+Type=oneshot
+User=user
+ExecStart=/usr/bin/logger -t security-log-exporter "ALERT: collector.py 실패 - 수집 중단됨 (systemd journal 확인 필요)"
