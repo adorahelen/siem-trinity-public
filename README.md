@@ -560,8 +560,12 @@ gantt
 
 ### 체크포인트 (git tag — 롤백용)
 
+> [!IMPORTANT]
+> **이 공개판에는 아래 태그가 없습니다.** 위생 처리를 위해 단일 커밋으로 스쿼시했기 때문입니다 (`git tag -l 'checkpoint/*'` → 0건).
+> 아래 표와 롤백 명령은 **운영 저장소 기준**이며, 개발 경위를 남기기 위해 그대로 둡니다.
+
 <details>
-<summary><b>전체 목록</b></summary>
+<summary><b>전체 목록 (운영 저장소 기준)</b></summary>
 
 | Tag | 의미 |
 |---|---|
@@ -584,6 +588,7 @@ gantt
 </details>
 
 ```bash
+# ⚠️ 운영 저장소에서만 동작합니다. 공개판에는 태그가 없습니다.
 git checkout -b rollback checkpoint/<tag>      # 안전한 새 브랜치
 git tag -l 'checkpoint/*'                       # 전체 목록
 ```
@@ -661,6 +666,7 @@ curl http://<HOST>:5173/api/llm/health | jq
 ## 📖 개발 이력
 
 > 커밋 히스토리 기반 주요 작업 요약 · 최종 커밋 2026-07-25
+> ⚠️ **아래는 운영 저장소 기준입니다.** 공개판은 위생 처리를 위해 **단일 커밋으로 스쿼시**되어 있어 여기 적힌 히스토리가 `git log` 에 없습니다.
 
 | 시기 | 주요 작업 |
 |---------|-----------|
@@ -669,7 +675,7 @@ curl http://<HOST>:5173/api/llm/health | jq
 | 2026-04 | feat: SIEM Discord 알림 통합 — realtime + di… · config: 보존 기간 단축 — Loki 180d→90d, Promet… |
 | 2026-03 | feat: UI 6탭 구조 + 경보 상세 모달 + 날짜 비교 + 히트맵 · docs: CLAUDE.md 전면 업데이트 (구현 완료 + Docker… · feat: UI 날짜 선택 + 빈 IP 표시 개선 · feat: Docker 기반 배포 + React UI + 버그 수정 |
 
-**총 235개 커밋** · 주요 언어: Python
+**총 235개 커밋** (운영 저장소 기준 · 공개판 `git log` 는 1건) · 주요 언어: Python
 
 <!-- DEV-HISTORY:END -->
 
