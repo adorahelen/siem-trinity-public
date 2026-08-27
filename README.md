@@ -93,6 +93,7 @@
 - [🚀 빠른 시작](#-빠른-시작)
 - [🔄 데이터 흐름 (현재 운영)](#-데이터-흐름-현재-운영)
 - [💾 디스크 사용 분포 (232 실측 34 GB)](#-디스크-사용-분포-232-실측-34-gb)
+- [🗄 데이터 보관 정책](#-데이터-보관-정책)
 - [🖥 지원 / 비지원 환경](#-지원--비지원-환경)
 - [📚 레이어별 README](#-레이어별-readme)
 - [🗺 모노레포 운영](#-모노레포-운영)
@@ -145,7 +146,7 @@ flowchart TB
 
     subgraph DET["🎯 02-detection · 탐지+BFF"]
         ML["IF · CoV · Entropy<br/>4 ML 탐지기"]
-        API["detection-api FastAPI<br/>27 endpoints"]
+        API["detection-api FastAPI<br/>28 endpoints"]
         ML --- API
     end
 
@@ -497,6 +498,19 @@ pie title 디스크 사용 분포 (34 GB)
 
 ---
 
+## 🗄 데이터 보관 정책
+
+| 저장소 | 보관 기간 | 설정 위치 | 근거 |
+|---|---:|---|---|
+| **Loki** (로그) | **90일** | `01-collection/config/loki-config.yml` → `retention_period: 90d` · `retention_enabled: true` | **정보통신망법 시행령 §29의2** 법적 최소 3개월. 2026-04-25 180d → 90d 단축 (NVMe IOPS 절감) |
+| **Prometheus** (메트릭) | **30일** | `01-collection/docker-compose.yml` → `--storage.tsdb.retention.time=30d` | 대시보드 조회 범위 기준 |
+| **ChromaDB** (ATT&CK 임베딩 697) | 영구 | — | 지식 데이터라 만료 대상 아님 |
+| 콘솔 위젯 레이아웃 | 브라우저 보존 | `localStorage` (탭별 독립) | 서버 저장 아님 — 브라우저를 바꾸면 초기화 |
+
+> **지연 도착 로그는 거부됩니다.** `reject_old_samples: true` · `reject_old_samples_max_age: 168h` — 7일보다 오래된 타임스탬프의 로그는 Loki 가 적재를 거부합니다. 과거 로그를 소급 적재하려면 이 값을 먼저 올려야 합니다.
+
+---
+
 ## 🖥 지원 / 비지원 환경
 
 | | |
@@ -519,7 +533,7 @@ pie title 디스크 사용 분포 (34 GB)
 | 폴더 | 역할 |
 |---|---|
 | [`01-collection/README.md`](01-collection/README.md) | 수집 인프라 + 15+ 로그 소스 + XDR profile 3종 |
-| [`02-detection/README.md`](02-detection/README.md) | AI 탐지 4종 + FastAPI BFF 27 endpoints + 자동 차단 클라이언트 |
+| [`02-detection/README.md`](02-detection/README.md) | AI 탐지 4종 + FastAPI BFF · 28 endpoints + 자동 차단 클라이언트 |
 | [`03-intelligence/README.md`](03-intelligence/README.md) | LLM Agent + RAG + ATT&CK 임베딩 |
 | [`04-ui/README.md`](04-ui/README.md) | **TrinitySOC** — 통합 운영자 콘솔 |
 
@@ -546,8 +560,12 @@ gantt
 
 ### 체크포인트 (git tag — 롤백용)
 
+> [!IMPORTANT]
+> **이 공개판에는 아래 태그가 없습니다.** 위생 처리를 위해 단일 커밋으로 스쿼시했기 때문입니다 (`git tag -l 'checkpoint/*'` → 0건).
+> 아래 표와 롤백 명령은 **운영 저장소 기준**이며, 개발 경위를 남기기 위해 그대로 둡니다.
+
 <details>
-<summary><b>전체 목록</b></summary>
+<summary><b>전체 목록 (운영 저장소 기준)</b></summary>
 
 | Tag | 의미 |
 |---|---|
@@ -570,6 +588,7 @@ gantt
 </details>
 
 ```bash
+# ⚠️ 운영 저장소에서만 동작합니다. 공개판에는 태그가 없습니다.
 git checkout -b rollback checkpoint/<tag>      # 안전한 새 브랜치
 git tag -l 'checkpoint/*'                       # 전체 목록
 ```
@@ -647,6 +666,7 @@ curl http://<HOST>:5173/api/llm/health | jq
 ## 📖 개발 이력
 
 > 커밋 히스토리 기반 주요 작업 요약 · 최종 커밋 2026-07-25
+> ⚠️ **아래는 운영 저장소 기준입니다.** 공개판은 위생 처리를 위해 **단일 커밋으로 스쿼시**되어 있어 여기 적힌 히스토리가 `git log` 에 없습니다.
 
 | 시기 | 주요 작업 |
 |---------|-----------|
@@ -655,7 +675,7 @@ curl http://<HOST>:5173/api/llm/health | jq
 | 2026-04 | feat: SIEM Discord 알림 통합 — realtime + di… · config: 보존 기간 단축 — Loki 180d→90d, Promet… |
 | 2026-03 | feat: UI 6탭 구조 + 경보 상세 모달 + 날짜 비교 + 히트맵 · docs: CLAUDE.md 전면 업데이트 (구현 완료 + Docker… · feat: UI 날짜 선택 + 빈 IP 표시 개선 · feat: Docker 기반 배포 + React UI + 버그 수정 |
 
-**총 235개 커밋** · 주요 언어: Python
+**총 235개 커밋** (운영 저장소 기준 · 공개판 `git log` 는 1건) · 주요 언어: Python
 
 <!-- DEV-HISTORY:END -->
 
